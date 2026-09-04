@@ -1,1 +1,67 @@
+# config/tools.yaml
+#
+# Reference documentation of the underlying Amadeus REST shape only.
+# The agent (agents/orchestrator.py) does NOT load this file -- it uses the
+# native Python functions in tools/*.py directly, which is more reliable
+# than routing through a generic OpenAPI toolset (explicit error handling,
+# currency conversion, and now payment/idempotency logic all live in the
+# Python layer). Kept here for anyone wiring an OpenAPI-based MCP toolset
+# separately, and as a quick reference for the two Amadeus endpoints in use.
+mcp_version: "1.0"
+source:
+  type: openapi
+  base_url: "https://test.api.amadeus.com"   # https://api.amadeus.com in production
+  headers:
+    Authorization: "Bearer ${AMADEUS_ACCESS_TOKEN}"
 
+tools:
+  - name: search_flights
+    description: "Searches across hundreds of airlines to find the lowest live flight fares between cities or airport hubs."
+    method: GET
+    path: "/v2/shopping/flight-offers"
+    parameters:
+      type: object
+      properties:
+        originLocationCode:
+          type: string
+          description: "The 3-letter IATA code of the departure city/airport (e.g., SGN for Ho Chi Minh City, DFW for Dallas)."
+        destinationLocationCode:
+          type: string
+          description: "The 3-letter IATA code of the arrival city/airport (e.g., CDG for Paris, NRT for Tokyo)."
+        departureDate:
+          type: string
+          description: "The targeted departure take-off date formatted strictly as YYYY-MM-DD."
+        adults:
+          type: integer
+          description: "The total count of adult travelers (aged 12+)."
+          default: 1
+      required:
+        - originLocationCode
+        - destinationLocationCode
+        - departureDate
+        - adults
+
+  - name: search_hotels
+    description: "Retrieves room availability and pricing metrics for hotels inside a specific city using Amadeus property indexes."
+    method: GET
+    path: "/v3/shopping/hotel-offers"
+    parameters:
+      type: object
+      properties:
+        hotelIds:
+          type: string
+          description: "Comma-separated string of unique Amadeus Hotel IDs (e.g., 'MCLONGPAR,CYPARIS4')."
+        adults:
+          type: integer
+          description: "The total count of adult guests requested per room slot."
+          default: 1
+        checkInDate:
+          type: string
+          description: "Target check-in start date formatted strictly as YYYY-MM-DD."
+        roomQuantity:
+          type: integer
+          description: "The total volume count of separate physical rooms requested."
+          default: 1
+      required:
+        - hotelIds
+        - checkInDate
