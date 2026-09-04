@@ -1,0 +1,20 @@
+# Local secret profile layers -- a .gitignore only stops `git add`, it does
+# nothing once a file has already been shared, so keep real secrets ONLY in
+# these untracked files or in Secret Manager, never pasted into any tracked
+# file, notebook, or chat.
+.env
+adk.env
+local-gcp-key.json
+
+.idea/
+.vscode/
+
+__pycache__/
+*.pyc
+.venv/
+venv/
+.ipynb_checkpoints/
+
+*.egg-info/
+.pytest_cache/
+.coverage

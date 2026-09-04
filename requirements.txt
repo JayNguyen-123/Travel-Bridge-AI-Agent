@@ -1,0 +1,12 @@
+google-adk[all]>=2.1.0
+google-genai>=0.1.0
+fastapi>=0.115.0
+uvicorn[standard]>=0.29.0
+websockets>=12.0
+requests>=2.31.0
+psycopg2-binary>=2.9.9
+twilio>=9.1.0
+sendgrid>=6.11.0
+phonenumbers>=8.13.0
+stripe>=10.0.0
+python-dotenv>=1.0.1
