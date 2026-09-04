@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Support Queue -- Admin</title>
+<style>
+  :root {
+    --bg: #0f172a; --panel: #ffffff; --ink: #0f172a; --muted: #64748b;
+    --border: #e2e8f0; --urgent: #dc2626; --urgent-bg: #fee2e2;
+    --ok: #16a34a; --ok-bg: #dcfce7; --accent: #2563eb;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #f1f5f9; color: var(--ink);
+  }
+  header {
+    background: var(--bg); color: #fff; padding: 16px 24px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  header h1 { font-size: 16px; margin: 0; font-weight: 600; }
+  header .sub { color: #94a3b8; font-size: 12px; margin-top: 2px; }
+  main { max-width: 1100px; margin: 0 auto; padding: 24px; display: grid; grid-template-columns: 1fr; gap: 16px; }
+  .controls { display: flex; gap: 8px; align-items: center; margin-bottom: 4px; }
+  select, input[type=text] {
+    padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px;
+  }
+  button {
+    padding: 6px 12px; border-radius: 6px; border: 1px solid var(--border);
+    background: #fff; cursor: pointer; font-size: 13px; color: var(--ink);
+  }
+  button:hover { background: #f8fafc; }
+  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  button.primary:hover { opacity: 0.9; }
+  button.danger { color: var(--urgent); border-color: var(--urgent); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  section.panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  section.panel h2 { font-size: 13px; margin: 0; padding: 12px 16px; border-bottom: 1px solid var(--border); color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 10px 16px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--muted); font-weight: 500; font-size: 12px; }
+  tr:last-child td { border-bottom: none; }
+  tr.row { cursor: pointer; }
+  tr.row:hover { background: #f8fafc; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+  .badge.urgent { background: var(--urgent-bg); color: var(--urgent); }
+  .badge.normal { background: #f1f5f9; color: var(--muted); }
+  .empty { padding: 24px 16px; color: var(--muted); font-size: 13px; text-align: center; }
+  .overlay { position: fixed; inset: 0; background: rgba(15,23,42,0.4); display: none; align-items: flex-start; justify-content: center; padding: 40px 16px; z-index: 10; }
+  .overlay.open { display: flex; }
+  .modal { background: #fff; border-radius: 10px; max-width: 560px; width: 100%; padding: 20px 24px; max-height: 85vh; overflow-y: auto; }
+  .modal h3 { margin: 0 0 4px; font-size: 15px; }
+  .modal .meta { color: var(--muted); font-size: 12px; margin-bottom: 16px; }
+  .field { margin-bottom: 12px; }
+  .field label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+  .field textarea, .field input { width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; font-family: inherit; }
+  .field textarea { min-height: 60px; resize: vertical; }
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border); }
+  .detail-block { background: #f8fafc; border-radius: 8px; padding: 12px; font-size: 12.5px; margin-bottom: 12px; white-space: pre-wrap; }
+  .error-msg { color: var(--urgent); font-size: 12.5px; margin-top: 8px; }
+  .close-x { float: right; background: none; border: none; font-size: 18px; cursor: pointer; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>Support &amp; Refund Queue</h1>
+    <div class="sub">Internal admin tool -- travel-ai-agent</div>
+  </div>
+  <div id="who"></div>
+</header>
+
+<main>
+  <div class="controls">
+    <label for="statusFilter" style="font-size:13px;color:var(--muted)">Ticket status:</label>
+    <select id="statusFilter">
+      <option value="open" selected>Open</option>
+      <option value="in_progress">In progress</option>
+      <option value="closed">Closed</option>
+      <option value="all">All</option>
+    </select>
+    <button id="refreshBtn">Refresh</button>
+  </div>
+
+  <section class="panel">
+    <h2>Support tickets</h2>
+    <table id="ticketsTable">
+      <thead><tr><th>Priority</th><th>Type</th><th>Traveler</th><th>Reference</th><th>Opened</th><th>Status</th></tr></thead>
+      <tbody id="ticketsBody"></tbody>
+    </table>
+    <div class="empty" id="ticketsEmpty" style="display:none">No tickets in this view.</div>
+  </section>
+
+  <section class="panel">
+    <h2>Bookings awaiting a manual refund decision</h2>
+    <table id="bookingsTable">
+      <thead><tr><th>Reference</th><th>Traveler</th><th>Amount</th><th>Refund status</th><th>Cancelled</th></tr></thead>
+      <tbody id="bookingsBody"></tbody>
+    </table>
+    <div class="empty" id="bookingsEmpty" style="display:none">Nothing pending review.</div>
+  </section>
+</main>
+
+<div class="overlay" id="overlay">
+  <div class="modal" id="modal"></div>
+</div>
+
+<script>
+const state = { creds: null, queue: null, ticketDetail: null };
+
+function authHeader() {
+  return "Basic " + btoa(state.creds.user + ":" + state.creds.pass);
+}
+
+async function api(path, opts = {}) {
+  const res = await fetch(path, {
+    ...opts,
+    headers: { ...(opts.headers || {}), Authorization: authHeader(), "Content-Type": "application/json" },
+  });
+  if (res.status === 401) { state.creds = null; throw new Error("Invalid credentials."); }
+  if (!res.ok) {
+    let detail = res.statusText;
+    try { detail = (await res.json()).detail || detail; } catch (e) {}
+    throw new Error(detail);
+  }
+  return res.status === 204 ? null : res.json();
+}
+
+function fmtMoney(amount, currency) {
+  if (amount == null) return "--";
+  const zeroDecimal = ["JPY", "KRW", "VND", "CLP"].includes((currency || "").toUpperCase());
+  const val = zeroDecimal ? amount : amount / 100;
+  return `${val.toLocaleString()} ${currency || ""}`;
+}
+function fmtDate(s) { return s ? new Date(s).toLocaleString() : "--"; }
+
+async function login() {
+  const user = prompt("Admin username (any value):", "admin") || "admin";
+  const pass = prompt("Admin key:");
+  if (!pass) return false;
+  state.creds = { user, pass };
+  try {
+    await loadQueue();
+    document.getElementById("who").textContent = "Signed in as " + user;
+    return true;
+  } catch (e) {
+    alert("Login failed: " + e.message);
+    state.creds = null;
+    return false;
+  }
+}
+
+async function loadQueue() {
+  const status = document.getElementById("statusFilter").value;
+  const data = await api(`/admin/api/queue?status=${encodeURIComponent(status)}`);
+  state.queue = data;
+  renderTickets(data.support_requests);
+  renderBookings(data.bookings_pending_refund);
+}
+
+function renderTickets(rows) {
+  const body = document.getElementById("ticketsBody");
+  const empty = document.getElementById("ticketsEmpty");
+  body.innerHTML = "";
+  empty.style.display = rows.length ? "none" : "block";
+  for (const t of rows) {
+    const tr = document.createElement("tr");
+    tr.className = "row";
+    tr.innerHTML = `
+      <td><span class="badge ${t.priority === 'urgent' ? 'urgent' : 'normal'}">${t.priority}</span></td>
+      <td>${t.request_type}</td>
+      <td>${t.traveler_name || "--"}</td>
+      <td>${t.reference_code || "--"}</td>
+      <td>${fmtDate(t.created_at)}</td>
+      <td>${t.status}</td>
+    `;
+    tr.onclick = () => openTicket(t.id);
+    body.appendChild(tr);
+  }
+}
+
+function renderBookings(rows) {
+  const body = document.getElementById("bookingsBody");
+  const empty = document.getElementById("bookingsEmpty");
+  body.innerHTML = "";
+  empty.style.display = rows.length ? "none" : "block";
+  for (const b of rows) {
+    const tr = document.createElement("tr");
+    tr.className = "row";
+    tr.innerHTML = `
+      <td>${b.reference_code || "--"}</td>
+      <td>${b.traveler_name || "--"}</td>
+      <td>${b.price_amount || "--"} ${b.currency_type || ""}</td>
+      <td><span class="badge ${b.refund_status === 'auto_refund_failed' ? 'urgent' : 'normal'}">${b.refund_status}</span></td>
+      <td>${fmtDate(b.cancelled_at)}</td>
+    `;
+    tr.onclick = () => openBooking(b);
+    body.appendChild(tr);
+  }
+}
+
+async function openTicket(id) {
+  const t = await api(`/admin/api/support-requests/${id}`);
+  showModal(renderTicketModal(t));
+}
+
+function openBooking(b) {
+  showModal(renderBookingModal(b));
+}
+
+function showModal(html) {
+  document.getElementById("modal").innerHTML = html;
+  document.getElementById("overlay").classList.add("open");
+}
+function closeModal() {
+  document.getElementById("overlay").classList.remove("open");
+}
+document.getElementById("overlay").addEventListener("click", (e) => {
+  if (e.target.id === "overlay") closeModal();
+});
+
+function renderTravelerList(travelers) {
+  if (!travelers || !travelers.length) return "";
+  const rows = travelers.map((tr, i) => {
+    const name = `${tr.first_name || ""} ${tr.last_name || ""}`.trim() || "(unnamed)";
+    const bits = [tr.traveler_type || "ADULT", tr.date_of_birth ? `DOB ${tr.date_of_birth}` : null, tr.gender || null]
+      .filter(Boolean).map(escapeHtml).join(" &middot; ");
+    return `${i + 1}. ${escapeHtml(name)} <span style="color:var(--muted)">(${bits})</span>`;
+  }).join("<br>");
+  const heading = travelers.length > 1 ? `Travelers (${travelers.length})` : "Traveler";
+  return `<div class="detail-block"><strong>${heading}:</strong><br>${rows}</div>`;
+}
+
+function renderTicketModal(t) {
+  const payment = t.payment;
+  const canRefund = payment && !payment.refund_id && payment.payment_intent_id;
+  return `
+    <button class="close-x" onclick="closeModal()">&times;</button>
+    <h3>Ticket #${t.id} -- ${t.request_type} <span class="badge ${t.priority === 'urgent' ? 'urgent' : 'normal'}">${t.priority}</span></h3>
+    <div class="meta">${t.traveler_name || "unknown traveler"} &middot; ${t.reference_code || "no reference"} &middot; opened ${fmtDate(t.created_at)}</div>
+    <div class="detail-block">${escapeHtml(t.details || "(no details)")}</div>
+    ${renderTravelerList(t.travelers)}
+    ${payment ? `<div class="detail-block">Payment: ${payment.status}, ${fmtMoney(payment.amount_total, payment.currency)}${payment.refund_id ? ` -- refunded ${fmtMoney(payment.refund_amount, payment.currency)} (${payment.refund_id})` : ""}</div>` : ""}
+    ${t.resolution_notes ? `<div class="detail-block"><strong>Resolution notes:</strong>\n${escapeHtml(t.resolution_notes)}</div>` : ""}
+    <div class="field">
+      <label>Your name</label>
+      <input type="text" id="resolvedBy" placeholder="e.g. Jay" />
+    </div>
+    <div class="field">
+      <label>Notes</label>
+      <textarea id="notes" placeholder="What did you do / decide?"></textarea>
+    </div>
+    <div class="actions">
+      ${t.idempotency_key && canRefund ? `<button class="primary" onclick="doRefund('${t.idempotency_key}')">Issue refund</button>` : ""}
+      ${t.idempotency_key ? `<button class="danger" onclick="doDenyRefund('${t.idempotency_key}')">Close without refund</button>` : ""}
+      <button onclick="doResolve(${t.id}, 'in_progress')">Mark in progress</button>
+      <button onclick="doResolve(${t.id}, 'closed')">Close (no money action)</button>
+    </div>
+    <div class="error-msg" id="modalError"></div>
+  `;
+}
+
+function renderBookingModal(b) {
+  return `
+    <button class="close-x" onclick="closeModal()">&times;</button>
+    <h3>Booking ${b.reference_code || "(no reference)"} <span class="badge ${b.refund_status === 'auto_refund_failed' ? 'urgent' : 'normal'}">${b.refund_status}</span></h3>
+    <div class="meta">${b.traveler_name || "unknown traveler"} &middot; ${b.price_amount || "--"} ${b.currency_type || ""} &middot; cancelled ${fmtDate(b.cancelled_at)}</div>
+    ${renderTravelerList(b.travelers)}
+    ${b.booking_notes ? `<div class="detail-block">${escapeHtml(b.booking_notes)}</div>` : ""}
+    <div class="field">
+      <label>Your name</label>
+      <input type="text" id="resolvedBy" placeholder="e.g. Jay" />
+    </div>
+    <div class="field">
+      <label>Notes</label>
+      <textarea id="notes" placeholder="Fare-rules reasoning, refund amount decided, etc."></textarea>
+    </div>
+    <div class="field">
+      <label>Refund amount override (optional -- Stripe smallest-unit integer; leave blank for full amount)</label>
+      <input type="text" id="amountOverride" placeholder="e.g. 15000 for $150.00" />
+    </div>
+    <div class="actions">
+      <button class="primary" onclick="doRefund('${b.idempotency_key}')">Issue refund</button>
+      <button class="danger" onclick="doDenyRefund('${b.idempotency_key}')">Deny refund</button>
+    </div>
+    <div class="error-msg" id="modalError"></div>
+  `;
+}
+
+function getModalInputs() {
+  const resolvedBy = (document.getElementById("resolvedBy") || {}).value || "";
+  const notes = (document.getElementById("notes") || {}).value || "";
+  const amountEl = document.getElementById("amountOverride");
+  const amount = amountEl && amountEl.value ? parseInt(amountEl.value, 10) : undefined;
+  return { resolvedBy, notes, amount };
+}
+
+function requireResolvedBy(resolvedBy) {
+  if (!resolvedBy.trim()) { showModalError("Enter your name first."); return false; }
+  return true;
+}
+function showModalError(msg) {
+  const el = document.getElementById("modalError");
+  if (el) el.textContent = msg;
+}
+
+async function doResolve(id, newStatus) {
+  const { resolvedBy, notes } = getModalInputs();
+  if (!requireResolvedBy(resolvedBy)) return;
+  try {
+    await api(`/admin/api/support-requests/${id}/resolve`, {
+      method: "POST",
+      body: JSON.stringify({ resolved_by: resolvedBy, resolution_notes: notes, new_status: newStatus }),
+    });
+    closeModal();
+    loadQueue();
+  } catch (e) { showModalError(e.message); }
+}
+
+async function doRefund(idempotencyKey) {
+  const { resolvedBy, notes, amount } = getModalInputs();
+  if (!requireResolvedBy(resolvedBy)) return;
+  if (!confirm("Issue this refund via Stripe now? This cannot be undone from here.")) return;
+  try {
+    const body = { resolved_by: resolvedBy, notes };
+    if (amount !== undefined && !Number.isNaN(amount)) body.amount = amount;
+    await api(`/admin/api/idempotency/${idempotencyKey}/refund`, { method: "POST", body: JSON.stringify(body) });
+    closeModal();
+    loadQueue();
+  } catch (e) { showModalError(e.message); }
+}
+
+async function doDenyRefund(idempotencyKey) {
+  const { resolvedBy, notes } = getModalInputs();
+  if (!requireResolvedBy(resolvedBy)) return;
+  try {
+    await api(`/admin/api/idempotency/${idempotencyKey}/deny-refund`, {
+      method: "POST",
+      body: JSON.stringify({ resolved_by: resolvedBy, notes }),
+    });
+    closeModal();
+    loadQueue();
+  } catch (e) { showModalError(e.message); }
+}
+
+function escapeHtml(s) {
+  const div = document.createElement("div");
+  div.textContent = s;
+  return div.innerHTML;
+}
+
+document.getElementById("refreshBtn").addEventListener("click", loadQueue);
+document.getElementById("statusFilter").addEventListener("change", loadQueue);
+
+(async function init() {
+  let ok = false;
+  while (!ok) { ok = await login(); if (!ok && !confirm("Try again?")) return; }
+})();
+</script>
+</body>
+</html>
