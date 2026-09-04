@@ -23,6 +23,7 @@ import logging
 import os
 
 import stripe
+from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -31,6 +32,19 @@ from google.adk.agents.run_config import RunConfig
 from google.adk.runners import InMemoryRunner
 from google.genai import types
 from google.genai.types import Blob, Content, Part
+
+# Must run before any of this project's own modules are imported below --
+# several read an env var at IMPORT time (e.g. tools/flight_tools.py's
+# AMADEUS_BASE_URL, MAX_PARTY_SIZE) rather than lazily per call, so a .env
+# file loaded any later than this would silently miss them. Nothing in this
+# codebase previously called this at all, despite python-dotenv already
+# being a declared dependency (requirements.txt) and README.md's Local
+# setup instructing `cp .env.example .env` -- so `.env` was never actually
+# read; every value in it had to be exported into the shell manually for
+# anything to pick it up. no-op (returns False, doesn't raise) if no .env
+# file is present, e.g. in a deployed environment using real env vars/Secret
+# Manager instead.
+load_dotenv()
 
 from agents.orchestrator import voice_travel_agent
 from db.database import get_db_connection, init_schema, release_db_connection
